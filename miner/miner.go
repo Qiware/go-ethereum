@@ -57,13 +57,27 @@ type Miner struct {
 	shouldStart int32 // should start indicates whether we should start after sync
 }
 
+/******************************************************************************
+ **函数名称: New
+ **功    能: 新建miner对象
+ **输入参数:
+ **     eth: eth对象
+ **     config: 配置信息
+ **     mux:
+ **     engine: 共识算法
+ **输出参数: NONE
+ **返    回: Miner对象
+ **实现描述:
+ **注意事项:
+ **作    者: # Xxxxxx.xxx # 2016.10.30 22:32:23 #
+ ******************************************************************************/
 func New(eth Backend, config *params.ChainConfig, mux *event.TypeMux, engine consensus.Engine) *Miner {
 	miner := &Miner{
-		eth:      eth,
-		mux:      mux,
-		engine:   engine,
-		worker:   newWorker(config, engine, common.Address{}, eth, mux),
-		canStart: 1,
+		eth:      eth,                                                   // 后台接口
+		mux:      mux,                                                   // MUX
+		engine:   engine,                                                // 共识引擎(接口)
+		worker:   newWorker(config, engine, common.Address{}, eth, mux), // 挖矿协程
+		canStart: 1,                                                     // 是否可以挖矿
 	}
 	miner.Register(NewCpuAgent(eth.BlockChain(), engine))
 	go miner.update()
@@ -103,6 +117,7 @@ out:
 	}
 }
 
+/* 开始挖矿 */
 func (self *Miner) Start(coinbase common.Address) {
 	atomic.StoreInt32(&self.shouldStart, 1)
 	self.SetEtherbase(coinbase)
@@ -114,21 +129,21 @@ func (self *Miner) Start(coinbase common.Address) {
 	atomic.StoreInt32(&self.mining, 1)
 
 	log.Info("Starting mining operation")
-	self.worker.start()
-	self.worker.commitNewWork()
+	self.worker.start()         // 开始工作
+	self.worker.commitNewWork() // 提交新work任务
 }
 
 func (self *Miner) Stop() {
-	self.worker.stop()
+	self.worker.stop() // 停止工作
 	atomic.StoreInt32(&self.mining, 0)
 	atomic.StoreInt32(&self.shouldStart, 0)
 }
 
 func (self *Miner) Register(agent Agent) {
 	if self.Mining() {
-		agent.Start()
+		agent.Start() // 开启挖矿
 	}
-	self.worker.register(agent)
+	self.worker.register(agent) // 注册CPU代理
 }
 
 func (self *Miner) Unregister(agent Agent) {

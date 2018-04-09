@@ -274,7 +274,7 @@ func isForked(s, head *big.Int) bool {
 	if s == nil || head == nil {
 		return false
 	}
-	return s.Cmp(head) <= 0
+	return s.Cmp(head) <= 0 // 判断s <= head是否成立
 }
 
 func configNumEqual(x, y *big.Int) bool {

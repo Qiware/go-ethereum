@@ -59,37 +59,37 @@ type LesServer interface {
 
 // Ethereum implements the Ethereum full node service.
 type Ethereum struct {
-	config      *Config
-	chainConfig *params.ChainConfig
+	config      *Config             // 配置信息
+	chainConfig *params.ChainConfig // 链配置信息
 
 	// Channel for shutting down the service
 	shutdownChan  chan bool    // Channel for shutting down the ethereum
 	stopDbUpgrade func() error // stop chain db sequential key upgrade
 
 	// Handlers
-	txPool          *core.TxPool
-	blockchain      *core.BlockChain
-	protocolManager *ProtocolManager
+	txPool          *core.TxPool     // 交易池
+	blockchain      *core.BlockChain // 区块链
+	protocolManager *ProtocolManager // 协议管理器
 	lesServer       LesServer
 
 	// DB interfaces
 	chainDb ethdb.Database // Block chain database
 
 	eventMux       *event.TypeMux
-	engine         consensus.Engine
-	accountManager *accounts.Manager
+	engine         consensus.Engine  // 共识引擎(接口)
+	accountManager *accounts.Manager // 账号管理(接口)
 
 	bloomRequests chan chan *bloombits.Retrieval // Channel receiving bloom data retrieval requests
 	bloomIndexer  *core.ChainIndexer             // Bloom indexer operating during block imports
 
 	ApiBackend *EthApiBackend
 
-	miner     *miner.Miner
-	gasPrice  *big.Int
-	etherbase common.Address
+	miner     *miner.Miner   // 矿工对象
+	gasPrice  *big.Int       // GAS价格
+	etherbase common.Address // 以太坊钱包
 
-	networkId     uint64
-	netRPCService *ethapi.PublicNetAPI
+	networkId     uint64               // 网络ID
+	netRPCService *ethapi.PublicNetAPI // RPC服务
 
 	lock sync.RWMutex // Protects the variadic fields (e.g. gas price and etherbase)
 }
@@ -101,6 +101,18 @@ func (s *Ethereum) AddLesServer(ls LesServer) {
 
 // New creates a new Ethereum object (including the
 // initialisation of the common Ethereum object)
+/******************************************************************************
+ **函数名称: New
+ **功    能: 初始化以太坊节点
+ **输入参数:
+ **     ctx: 全局对象
+ **     config: 配置信息
+ **输出参数: NONE
+ **返    回: 以太坊对象
+ **实现描述:
+ **注意事项:
+ **作    者: # Xxxxxx.xxx # 2016.10.30 22:32:23 #
+ ******************************************************************************/
 func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	if config.SyncMode == downloader.LightSync {
 		return nil, errors.New("can't run eth.Ethereum in light sync mode, use les.LightEthereum")
@@ -108,10 +120,13 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	if !config.SyncMode.IsValid() {
 		return nil, fmt.Errorf("invalid sync mode %d", config.SyncMode)
 	}
+	/* 1.创建区块链数据库 */
 	chainDb, err := CreateDB(ctx, config, "chaindata")
 	if err != nil {
 		return nil, err
 	}
+
+	/* 2.配置创世块 */
 	stopDbUpgrade := upgradeDeduplicateData(chainDb)
 	chainConfig, genesisHash, genesisErr := core.SetupGenesisBlock(chainDb, config.Genesis)
 	if _, ok := genesisErr.(*params.ConfigCompatError); genesisErr != nil && !ok {
@@ -119,17 +134,18 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	}
 	log.Info("Initialised chain configuration", "config", chainConfig)
 
+	/* 3.启动以太坊节点 */
 	eth := &Ethereum{
-		config:         config,
-		chainDb:        chainDb,
-		chainConfig:    chainConfig,
+		config:         config,      // 配置信息
+		chainDb:        chainDb,     // 区块链DB
+		chainConfig:    chainConfig, // 链配置
 		eventMux:       ctx.EventMux,
-		accountManager: ctx.AccountManager,
-		engine:         CreateConsensusEngine(ctx, &config.Ethash, chainConfig, chainDb),
+		accountManager: ctx.AccountManager,                                               // 账号管理器
+		engine:         CreateConsensusEngine(ctx, &config.Ethash, chainConfig, chainDb), // 挖矿引擎
 		shutdownChan:   make(chan bool),
 		stopDbUpgrade:  stopDbUpgrade,
-		networkId:      config.NetworkId,
-		gasPrice:       config.GasPrice,
+		networkId:      config.NetworkId, // 网络ID
+		gasPrice:       config.GasPrice,  // GAS价格
 		etherbase:      config.Etherbase,
 		bloomRequests:  make(chan chan *bloombits.Retrieval),
 		bloomIndexer:   NewBloomIndexer(chainDb, params.BloomBitsBlocks),
@@ -137,7 +153,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 
 	log.Info("Initialising Ethereum protocol", "versions", ProtocolVersions, "network", config.NetworkId)
 
-	if !config.SkipBcVersionCheck {
+	if !config.SkipBcVersionCheck { // 检查区块链版本
 		bcVersion := core.GetBlockChainVersion(chainDb)
 		if bcVersion != core.BlockChainVersion && bcVersion != 0 {
 			return nil, fmt.Errorf("Blockchain DB version mismatch (%d / %d). Run geth upgradedb.\n", bcVersion, core.BlockChainVersion)

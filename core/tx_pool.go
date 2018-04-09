@@ -524,6 +524,9 @@ func (pool *TxPool) Content() (map[common.Address]types.Transactions, map[common
 // Pending retrieves all currently processable transactions, groupped by origin
 // account and sorted by nonce. The returned transaction set is a copy and can be
 // freely modified by calling code.
+// 获取当年前可以处理的所有交易
+// 注意: 交易以账户进行分组, 各组交易按nonce进行排序. 返回的交易集合是交易的拷贝,
+//       调用代码可以自由的修改.
 func (pool *TxPool) Pending() (map[common.Address]types.Transactions, error) {
 	pool.mu.Lock()
 	defer pool.mu.Unlock()

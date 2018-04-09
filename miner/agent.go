@@ -41,10 +41,10 @@ type CpuAgent struct {
 
 func NewCpuAgent(chain consensus.ChainReader, engine consensus.Engine) *CpuAgent {
 	miner := &CpuAgent{
-		chain:  chain,
-		engine: engine,
-		stop:   make(chan struct{}, 1),
-		workCh: make(chan *Work, 1),
+		chain:  chain,                  // 区块链
+		engine: engine,                 // 共识算法
+		stop:   make(chan struct{}, 1), // STOP通道
+		workCh: make(chan *Work, 1),    // 处理通道
 	}
 	return miner
 }
@@ -68,6 +68,7 @@ done:
 	}
 }
 
+/* 开始挖矿 */
 func (self *CpuAgent) Start() {
 	if !atomic.CompareAndSwapInt32(&self.isMining, 0, 1) {
 		return // agent already started
@@ -75,19 +76,20 @@ func (self *CpuAgent) Start() {
 	go self.update()
 }
 
+/* 更新处理 */
 func (self *CpuAgent) update() {
 out:
 	for {
 		select {
-		case work := <-self.workCh:
+		case work := <-self.workCh: // 等待work任务
 			self.mu.Lock()
 			if self.quitCurrentOp != nil {
 				close(self.quitCurrentOp)
 			}
 			self.quitCurrentOp = make(chan struct{})
-			go self.mine(work, self.quitCurrentOp)
+			go self.mine(work, self.quitCurrentOp) // 挖矿处理
 			self.mu.Unlock()
-		case <-self.stop:
+		case <-self.stop: // 等待停止信号
 			self.mu.Lock()
 			if self.quitCurrentOp != nil {
 				close(self.quitCurrentOp)
@@ -99,10 +101,11 @@ out:
 	}
 }
 
+/* 挖矿处理 */
 func (self *CpuAgent) mine(work *Work, stop <-chan struct{}) {
 	if result, err := self.engine.Seal(self.chain, work.Block, stop); result != nil {
 		log.Info("Successfully sealed new block", "number", result.Number(), "hash", result.Hash())
-		self.returnCh <- &Result{work, result}
+		self.returnCh <- &Result{work, result} // 挖矿结果放入结果队列
 	} else {
 		if err != nil {
 			log.Warn("Block sealing failed", "err", err)
