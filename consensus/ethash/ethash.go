@@ -212,6 +212,7 @@ func newCache(epoch uint64) interface{} {
 }
 
 // generate ensures that the cache content is generated before use.
+// 确认使用前已生成了cache内容.
 func (c *cache) generate(dir string, limit int, test bool) {
 	c.once.Do(func() {
 		size := cacheSize(c.epoch*epochLength + 1)
@@ -288,6 +289,7 @@ func newDataset(epoch uint64) interface{} {
 }
 
 // generate ensures that the dataset content is generated before use.
+// 在使用前, 确认dataset已经产生
 func (d *dataset) generate(dir string, limit int, test bool) {
 	d.once.Do(func() {
 		csize := cacheSize(d.epoch*epochLength + 1)
@@ -511,6 +513,8 @@ func (ethash *Ethash) cache(block uint64) *cache {
 // dataset tries to retrieve a mining dataset for the specified block number
 // by first checking against a list of in-memory datasets, then against DAGs
 // stored on disk, and finally generating one if none can be found.
+// 尝试为指定的块号获得挖矿dataset.
+// 首先检测在内存中的dataset, 再检查存在磁盘上的DAGs, 最后重新生成.
 func (ethash *Ethash) dataset(block uint64) *dataset {
 	epoch := block / epochLength
 	currentI, futureI := ethash.datasets.get(epoch)

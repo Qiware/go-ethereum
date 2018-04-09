@@ -37,9 +37,9 @@ import (
 const (
 	datasetInitBytes   = 1 << 30 // Bytes in dataset at genesis
 	datasetGrowthBytes = 1 << 23 // Dataset growth per epoch
-	cacheInitBytes     = 1 << 24 // Bytes in cache at genesis
-	cacheGrowthBytes   = 1 << 17 // Cache growth per epoch
-	epochLength        = 30000   // Blocks per epoch
+	cacheInitBytes     = 1 << 24 // Bytes in cache at genesis(16MB)
+	cacheGrowthBytes   = 1 << 17 // Cache growth per epoch(1/8*MB)
+	epochLength        = 30000   // Blocks per epoch 每30000块算一个纪元
 	mixBytes           = 128     // Width of mix
 	hashBytes          = 64      // Hash length in bytes
 	hashWords          = 16      // Number of 32 bit ints in a hash
@@ -61,6 +61,8 @@ func cacheSize(block uint64) uint64 {
 // calcCacheSize calculates the cache size for epoch. The cache size grows linearly,
 // however, we always take the highest prime below the linearly growing threshold in order
 // to reduce the risk of accidental regularities leading to cyclic behavior.
+// 为epoch的计算缓存大小. 缓存大小是线性增长的, 然而, 我们总是尽量的降低线性增长的阈值,
+// 为的是减少偶然规律导致循环行为的风险.
 func calcCacheSize(epoch int) uint64 {
 	size := cacheInitBytes + cacheGrowthBytes*uint64(epoch) - hashBytes
 	for !new(big.Int).SetUint64(size / hashBytes).ProbablyPrime(1) { // Always accurate for n < 2^64
@@ -329,6 +331,7 @@ func generateDataset(dest []uint32, epoch uint64, cache []uint32) {
 
 // hashimoto aggregates data from the full dataset in order to produce our final
 // value for a particular header hash and nonce.
+// 为了产生我们最终的头部hash和nonce, 从dataset聚合数据
 func hashimoto(hash []byte, nonce uint64, size uint64, lookup func(index uint32) []uint32) ([]byte, []byte) {
 	// Calculate the number of theoretical rows (we use one buffer nonetheless)
 	rows := uint32(size / mixBytes)
@@ -390,6 +393,7 @@ func hashimotoLight(size uint64, cache []uint32, hash []byte, nonce uint64) ([]b
 // hashimotoFull aggregates data from the full dataset (using the full in-memory
 // dataset) in order to produce our final value for a particular header hash and
 // nonce.
+// 为了产生我们最终的头部hash和nonce, 从dataset聚合数据(内存数据集)
 func hashimotoFull(dataset []uint32, hash []byte, nonce uint64) ([]byte, []byte) {
 	lookup := func(index uint32) []uint32 {
 		offset := index * hashWords

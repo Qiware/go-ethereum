@@ -107,6 +107,7 @@ func defaultNodeConfig() node.Config {
 	return cfg
 }
 
+/* 生成node.Node对象 */
 func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 	// Load defaults.
 	cfg := gethConfig{

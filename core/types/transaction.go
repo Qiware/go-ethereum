@@ -390,6 +390,7 @@ type TransactionsByPriceAndNonce struct {
 //
 // Note, the input map is reowned so the caller should not interact any more with
 // if after providing it to the constructor.
+// 创建一个交易集合: 能够获取按照价格有序的交易
 func NewTransactionsByPriceAndNonce(signer Signer, txs map[common.Address]Transactions) *TransactionsByPriceAndNonce {
 	// Initialize a price based heap with the head transactions
 	heads := make(TxByPrice, 0, len(txs))
@@ -399,17 +400,18 @@ func NewTransactionsByPriceAndNonce(signer Signer, txs map[common.Address]Transa
 		acc, _ := Sender(signer, accTxs[0])
 		txs[acc] = accTxs[1:]
 	}
-	heap.Init(&heads)
+	heap.Init(&heads) // 堆排序
 
 	// Assemble and return the transaction set
 	return &TransactionsByPriceAndNonce{
 		txs:    txs,
-		heads:  heads,
+		heads:  heads, // 按照价格有序排列的堆
 		signer: signer,
 	}
 }
 
 // Peek returns the next transaction by price.
+// 获取堆顶元素(价格最高的交易)
 func (t *TransactionsByPriceAndNonce) Peek() *Transaction {
 	if len(t.heads) == 0 {
 		return nil
@@ -418,6 +420,7 @@ func (t *TransactionsByPriceAndNonce) Peek() *Transaction {
 }
 
 // Shift replaces the current best head with the next one from the same account.
+// 使用t.txs[0]替换t.heads堆顶
 func (t *TransactionsByPriceAndNonce) Shift() {
 	acc, _ := Sender(t.signer, t.heads[0])
 	if txs, ok := t.txs[acc]; ok && len(txs) > 0 {

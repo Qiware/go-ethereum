@@ -97,6 +97,7 @@ func StoreKey(dir, auth string, scryptN, scryptP int) (common.Address, error) {
 	return a.Address, err
 }
 
+/* 存储私钥信息(生成KEYSTORE文件) */
 func (ks keyStorePassphrase) StoreKey(filename string, key *Key, auth string) error {
 	keyjson, err := EncryptKey(key, auth, ks.scryptN, ks.scryptP)
 	if err != nil {

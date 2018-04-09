@@ -287,6 +287,7 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainReader, header, parent *
 // CalcDifficulty is the difficulty adjustment algorithm. It returns
 // the difficulty that a new block should have when created at time
 // given the parent block's time and difficulty.
+// 矫正挖矿难度
 func (ethash *Ethash) CalcDifficulty(chain consensus.ChainReader, time uint64, parent *types.Header) *big.Int {
 	return CalcDifficulty(chain.Config(), time, parent)
 }
@@ -294,15 +295,16 @@ func (ethash *Ethash) CalcDifficulty(chain consensus.ChainReader, time uint64, p
 // CalcDifficulty is the difficulty adjustment algorithm. It returns
 // the difficulty that a new block should have when created at time
 // given the parent block's time and difficulty.
+// 计算挖矿难度
 func CalcDifficulty(config *params.ChainConfig, time uint64, parent *types.Header) *big.Int {
 	next := new(big.Int).Add(parent.Number, big1)
 	switch {
 	case config.IsByzantium(next):
-		return calcDifficultyByzantium(time, parent)
+		return calcDifficultyByzantium(time, parent) // 计算拜占庭难度
 	case config.IsHomestead(next):
-		return calcDifficultyHomestead(time, parent)
+		return calcDifficultyHomestead(time, parent) // 计算Homestead难度
 	default:
-		return calcDifficultyFrontier(time, parent)
+		return calcDifficultyFrontier(time, parent) // 计算Frontier难度
 	}
 }
 
@@ -507,7 +509,7 @@ func (ethash *Ethash) Prepare(chain consensus.ChainReader, header *types.Header)
 	if parent == nil {
 		return consensus.ErrUnknownAncestor
 	}
-	header.Difficulty = ethash.CalcDifficulty(chain, header.Time.Uint64(), parent)
+	header.Difficulty = ethash.CalcDifficulty(chain, header.Time.Uint64(), parent) // 计算难度
 	return nil
 }
 
