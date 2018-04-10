@@ -112,7 +112,7 @@ func (ethash *Ethash) mine(block *types.Block, id int, seed uint64, abort chan s
 		hash    = header.HashNoNonce().Bytes()                    // 哈希值(无NONCE时)
 		target  = new(big.Int).Div(maxUint256, header.Difficulty) // 相除
 		number  = header.Number.Uint64()                          // 块号
-		dataset = ethash.dataset(number)                          // 数据集合
+		dataset = ethash.dataset(number)                          // 获取dataset集合
 	)
 	// Start generating random nonces until we abort or find a good one
 	// 开始生成随机nonce知道我们终止或找到一个正确值.

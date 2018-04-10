@@ -74,6 +74,8 @@ func memoryMap(path string) (*os.File, mmap.MMap, []uint32, error) {
 		file.Close()
 		return nil, nil, nil, err
 	}
+
+	// 校验合法性: 载入的文件头部如有固定的魔幻数字, 则认为合法.
 	for i, magic := range dumpMagic {
 		if buffer[i] != magic {
 			mem.Unmap()
@@ -107,30 +109,32 @@ func memoryMapFile(file *os.File, write bool) (mmap.MMap, []uint32, error) {
 // access, fill it with the data from a generator and then move it into the final
 // path requested.
 func memoryMapAndGenerate(path string, size uint64, generator func(buffer []uint32)) (*os.File, mmap.MMap, []uint32, error) {
-	// Ensure the data folder exists
+	// Ensure the data folder exists 创建目录
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return nil, nil, nil, err
 	}
 	// Create a huge temporary empty file to fill with data
 	temp := path + "." + strconv.Itoa(rand.Int())
 
-	dump, err := os.Create(temp)
+	dump, err := os.Create(temp) // 生成临时文件
 	if err != nil {
 		return nil, nil, nil, err
 	}
+	// 设置文件长度
 	if err = dump.Truncate(int64(len(dumpMagic))*4 + int64(size)); err != nil {
 		return nil, nil, nil, err
 	}
 	// Memory map the file for writing and fill it with the generator
+	// 将文件映射到内存: 便于将生成的数据写入和填入文件.
 	mem, buffer, err := memoryMapFile(dump, true)
 	if err != nil {
 		dump.Close()
 		return nil, nil, nil, err
 	}
-	copy(buffer, dumpMagic)
+	copy(buffer, dumpMagic) // 设置魔幻数字
 
 	data := buffer[len(dumpMagic):]
-	generator(data)
+	generator(data) // 生成cache内容
 
 	if err := mem.Unmap(); err != nil {
 		return nil, nil, nil, err
@@ -171,6 +175,19 @@ func newlru(what string, maxItems int, new func(epoch uint64) interface{}) *lru 
 // get retrieves or creates an item for the given epoch. The first return value is always
 // non-nil. The second return value is non-nil if lru thinks that an item will be useful in
 // the near future.
+/******************************************************************************
+ **函数名称: get
+ **功    能: 获取或创建一个epoch实例
+ **输入参数:
+ **     epoch: 世纪编号
+ **输出参数: NONE
+ **返    回:
+ **     item: 当前epoch对象
+ **     future: 未来epoch对象
+ **实现描述:
+ **注意事项:
+ **作    者: # Xxxxxxx.xxxx # 2016-03-09 00:12:38 #
+ ******************************************************************************/
 func (lru *lru) get(epoch uint64) (item, future interface{}) {
 	lru.mu.Lock()
 	defer lru.mu.Unlock()
@@ -198,11 +215,11 @@ func (lru *lru) get(epoch uint64) (item, future interface{}) {
 
 // cache wraps an ethash cache with some metadata to allow easier concurrent use.
 type cache struct {
-	epoch uint64    // Epoch for which this cache is relevant
-	dump  *os.File  // File descriptor of the memory mapped cache
-	mmap  mmap.MMap // Memory map itself to unmap before releasing
-	cache []uint32  // The actual cache data content (may be memory mapped)
-	once  sync.Once // Ensures the cache is generated only once
+	epoch uint64    // Epoch for which this cache is relevant // 与当前cache相关的epoch.
+	dump  *os.File  // File descriptor of the memory mapped cache //文件描述符: Cache映射.
+	mmap  mmap.MMap // Memory map itself to unmap before releasing // 内存映射
+	cache []uint32  // The actual cache data content (may be memory mapped) // 实际的cache内容
+	once  sync.Once // Ensures the cache is generated only once //确保cache只会产生一次
 }
 
 // newCache creates a new ethash verification cache and returns it as a plain Go
@@ -215,8 +232,8 @@ func newCache(epoch uint64) interface{} {
 // 确认使用前已生成了cache内容.
 func (c *cache) generate(dir string, limit int, test bool) {
 	c.once.Do(func() {
-		size := cacheSize(c.epoch*epochLength + 1)
-		seed := seedHash(c.epoch*epochLength + 1)
+		size := cacheSize(c.epoch*epochLength + 1) // 计算Cache大小(> 16MB)
+		seed := seedHash(c.epoch*epochLength + 1)  // 产生种子
 		if test {
 			size = 1024
 		}
@@ -236,18 +253,22 @@ func (c *cache) generate(dir string, limit int, test bool) {
 
 		// We're about to mmap the file, ensure that the mapping is cleaned up when the
 		// cache becomes unused.
+		// 我们计划mmap文件, 确定cache在未使用时映射已经清理干净.
 		runtime.SetFinalizer(c, (*cache).finalizer)
 
 		// Try to load the file from disk and memory map it
+		// 尝试从磁盘加载文件, 并及其载入内存.
 		var err error
 		c.dump, c.mmap, c.cache, err = memoryMap(path)
 		if err == nil {
 			logger.Debug("Loaded old ethash cache from disk")
 			return
 		}
+		// 从磁盘载入cache失败, 则需要重新生成.
 		logger.Debug("Failed to load old ethash cache", "err", err)
 
 		// No previous cache available, create a new cache file to fill
+		// 没有之前的cache, 则创建一个新的cache文件
 		c.dump, c.mmap, c.cache, err = memoryMapAndGenerate(path, size, func(buffer []uint32) { generateCache(buffer, c.epoch, seed) })
 		if err != nil {
 			logger.Error("Failed to generate mapped ethash cache", "err", err)
@@ -256,6 +277,7 @@ func (c *cache) generate(dir string, limit int, test bool) {
 			generateCache(c.cache, c.epoch, seed)
 		}
 		// Iterate over all previous instances and delete old ones
+		// 遍历之前所有的实例, 并删除老数据.
 		for ep := int(c.epoch) - limit; ep >= 0; ep-- {
 			seed := seedHash(uint64(ep)*epochLength + 1)
 			path := filepath.Join(dir, fmt.Sprintf("cache-R%d-%x%s", algorithmRevision, seed[:8], endian))
@@ -292,9 +314,9 @@ func newDataset(epoch uint64) interface{} {
 // 在使用前, 确认dataset已经产生
 func (d *dataset) generate(dir string, limit int, test bool) {
 	d.once.Do(func() {
-		csize := cacheSize(d.epoch*epochLength + 1)
-		dsize := datasetSize(d.epoch*epochLength + 1)
-		seed := seedHash(d.epoch*epochLength + 1)
+		csize := cacheSize(d.epoch*epochLength + 1)   // 获取cache内存大小(>= 16 MB)
+		dsize := datasetSize(d.epoch*epochLength + 1) // 获取dataset内存大小(>= 1GB)
+		seed := seedHash(d.epoch*epochLength + 1)     // 生成种子
 		if test {
 			csize = 1024
 			dsize = 32 * 1024
@@ -320,17 +342,20 @@ func (d *dataset) generate(dir string, limit int, test bool) {
 		runtime.SetFinalizer(d, (*dataset).finalizer)
 
 		// Try to load the file from disk and memory map it
+		// 将dataset文件加入内存
 		var err error
 		d.dump, d.mmap, d.dataset, err = memoryMap(path)
 		if err == nil {
 			logger.Debug("Loaded old ethash dataset from disk")
-			return
+			return // 载入成功
 		}
+
+		// 文件中无dataset数据, 则需要重新生成.
 		logger.Debug("Failed to load old ethash dataset", "err", err)
 
 		// No previous dataset available, create a new dataset file to fill
 		cache := make([]uint32, csize/4)
-		generateCache(cache, d.epoch, seed)
+		generateCache(cache, d.epoch, seed) // 生成cache数据
 
 		d.dump, d.mmap, d.dataset, err = memoryMapAndGenerate(path, dsize, func(buffer []uint32) { generateDataset(buffer, d.epoch, cache) })
 		if err != nil {
@@ -394,23 +419,23 @@ type Config struct {
 // Ethash is a consensus engine based on proot-of-work implementing the ethash
 // algorithm.
 type Ethash struct {
-	config Config
+	config Config // 配置信息
 
-	caches   *lru // In memory caches to avoid regenerating too often
-	datasets *lru // In memory datasets to avoid regenerating too often
+	caches   *lru // In memory caches to avoid regenerating too often(内存中的cache, 避免频繁的重复生成)
+	datasets *lru // In memory datasets to avoid regenerating too often (内存中的datasets, 避免频繁的重复生成)
 
 	// Mining related fields
-	rand     *rand.Rand    // Properly seeded random source for nonces
-	threads  int           // Number of threads to mine on if mining
-	update   chan struct{} // Notification channel to update mining parameters
-	hashrate metrics.Meter // Meter tracking the average hashrate
+	rand     *rand.Rand    // Properly seeded random source for nonces(随机源)
+	threads  int           // Number of threads to mine on if mining(挖矿线程数量)
+	update   chan struct{} // Notification channel to update mining parameters(更新挖矿参数的通知信道)
+	hashrate metrics.Meter // Meter tracking the average hashrate(Meter跟踪平均汇率)
 
-	// The fields below are hooks for testing
-	shared    *Ethash       // Shared PoW verifier to avoid cache regeneration
+	// The fields below are hooks for testing 测试相关字段
+	shared    *Ethash       // Shared PoW verifier to avoid cache regeneration(用于共享POW验证: 避免cache重复生成)
 	fakeFail  uint64        // Block number which fails PoW check even in fake mode
 	fakeDelay time.Duration // Time delay to sleep for before returning from verify
 
-	lock sync.Mutex // Ensures thread safety for the in-memory caches and mining fields
+	lock sync.Mutex // Ensures thread safety for the in-memory caches and mining fields 确保线程安全
 }
 
 // New creates a full sized ethash PoW scheme.
@@ -513,11 +538,20 @@ func (ethash *Ethash) cache(block uint64) *cache {
 // dataset tries to retrieve a mining dataset for the specified block number
 // by first checking against a list of in-memory datasets, then against DAGs
 // stored on disk, and finally generating one if none can be found.
-// 尝试为指定的块号获得挖矿dataset.
-// 首先检测在内存中的dataset, 再检查存在磁盘上的DAGs, 最后重新生成.
+/******************************************************************************
+ **函数名称: dataset
+ **功    能: 尝试为指定的块号获得挖矿dataset.
+ **输入参数:
+ **     block: 当前区块的编号
+ **输出参数: NONE
+ **返    回: 数据集合
+ **实现描述: 首先检测在内存中的dataset, 再检查存在磁盘上的DAGs, 最后重新生成.
+ **注意事项:
+ **作    者: # Xxxxxxx.xxxx # 2016-03-09 00:12:38 #
+ ******************************************************************************/
 func (ethash *Ethash) dataset(block uint64) *dataset {
-	epoch := block / epochLength
-	currentI, futureI := ethash.datasets.get(epoch)
+	epoch := block / epochLength                    // 计算世纪编号(每30000个区块为一个世纪)
+	currentI, futureI := ethash.datasets.get(epoch) // 从内存中获取dataset.
 	current := currentI.(*dataset)
 
 	// Wait for generation finish.

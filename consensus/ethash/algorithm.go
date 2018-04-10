@@ -109,6 +109,7 @@ func makeHasher(h hash.Hash) hasher {
 
 // seedHash is the seed to use for generating a verification cache and the mining
 // dataset.
+// 种子用于产生校验的cache和挖矿的dataset.
 func seedHash(block uint64) []byte {
 	seed := make([]byte, 32)
 	if block < epochLength {
@@ -231,6 +232,7 @@ func fnvHash(mix []uint32, data []uint32) {
 
 // generateDatasetItem combines data from 256 pseudorandomly selected cache nodes,
 // and hashes that to compute a single dataset node.
+// 生成dataset数据
 func generateDatasetItem(cache []uint32, index uint32, keccak512 hasher) []byte {
 	// Calculate the number of theoretical rows (we use one buffer nonetheless)
 	rows := uint32(len(cache) / hashWords)
@@ -264,6 +266,7 @@ func generateDatasetItem(cache []uint32, index uint32, keccak512 hasher) []byte 
 
 // generateDataset generates the entire ethash dataset for mining.
 // This method places the result into dest in machine byte order.
+// 通过cache生成Dataset数据
 func generateDataset(dest []uint32, epoch uint64, cache []uint32) {
 	// Print some debug logs to allow analysis on low end devices
 	logger := log.New("epoch", epoch)
@@ -820,6 +823,7 @@ var datasetSizes = [maxEpoch]uint64{
 
 // cacheSizes is a lookup table for the ethash verification cache size for the
 // first 2048 epochs (i.e. 61440000 blocks).
+// 用于查询前2048个世纪的cache大小.
 var cacheSizes = [maxEpoch]uint64{
 	16776896, 16907456, 17039296, 17170112, 17301056, 17432512, 17563072,
 	17693888, 17824192, 17955904, 18087488, 18218176, 18349504, 18481088,
